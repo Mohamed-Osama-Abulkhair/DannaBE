@@ -52,7 +52,7 @@ const authorization = catchAsyncError(async (req, res, next) => {
 
   if (targetUser) {
     if (String(id) !== String(req.user._id))
-      return next(new appError("U r not authorized to do it ", 498));
+      return next(new appError("U r not authorized to do it ", 401));
   }
   next();
 });
@@ -61,7 +61,7 @@ const allowedTo = (...roles) => {
   return catchAsyncError(async (req, res, next) => {
     if (!roles.includes(req.user.role))
       return next(
-        new appError("U r not authorized to access, U r " + req.user.role, 498)
+        new appError("U r not authorized to access, U r " + req.user.role, 401)
       );
     next();
   });
@@ -69,7 +69,7 @@ const allowedTo = (...roles) => {
 
 const isConfirmed = catchAsyncError(async (req, res, next) => {
   if (!req.user.confirmedEmail)
-    return next(new appError("you should confirm your account first", 498));
+    return next(new appError("you should confirm your account first", 401));
   next();
 });
 

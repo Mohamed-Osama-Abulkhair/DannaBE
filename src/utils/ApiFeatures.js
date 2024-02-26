@@ -8,9 +8,9 @@ export class ApiFeatures {
   paginate() {
     let page = this.queryString.page * 1 || 1;
     if (this.queryString.page <= 0) page = 1;
-    let skip = (page - 1) * 5;
+    let skip = (page - 1) * 25;
     this.page=page
-    this.mongooseQuery.skip(skip).limit(5);
+    this.mongooseQuery.skip(skip).limit(25);
     return this;
   }
 
@@ -49,6 +49,7 @@ export class ApiFeatures {
           { lName: { $regex: this.queryString.keyword, $options: "i" } },
           { email: { $regex: this.queryString.keyword, $options: "i" } },
           { role: { $regex: this.queryString.keyword, $options: "i" } },
+          { name: { $regex: this.queryString.keyword, $options: "i" } },
           { title: { $regex: this.queryString.keyword, $options: "i" } },
           { description: { $regex: this.queryString.keyword, $options: "i" } },
         ],
