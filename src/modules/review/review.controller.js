@@ -17,7 +17,6 @@ const addReview = catchAsyncError(async (req, res, next) => {
   });
   if (review) return next(new appError("you created a review before", 409));
   
-  console.log(  req.body)
   const result = new reviewModel(req.body);
   await result.save();
 

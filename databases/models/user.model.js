@@ -93,7 +93,6 @@ const userSchema = mongoose.Schema(
 );
 
 userSchema.pre("save", function () {
-  console.log(this)
   if (this.password)
     this.password = bcrypt.hashSync(this.password, Number(process.env.Round));
 });
