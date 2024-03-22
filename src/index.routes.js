@@ -14,6 +14,9 @@ import cartRouter from "./modules/cart/cart.router.js";
 import orderRouter from "./modules/order/order.router.js";
 
 export const init = (app) => {
+  app.get("/", (req, res, next) => {
+    res.status(200).json({ message: "Welcome to Danna App" });
+  });
   app.use("/api/v1/users", userRouter);
   app.use("/api/v1/categories", categoryRouter);
   app.use("/api/v1/brands", brandRouter);
