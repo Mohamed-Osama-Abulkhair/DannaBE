@@ -26,6 +26,7 @@ const userSchema = mongoose.Schema(
       trim: true,
       required: [true, "email required"],
       minLength: [5, "too short email"],
+      maxLength: [100, "too long email"],
       unique: [true, "email must be unique"],
       lowercase: true,
       validate: {
@@ -41,7 +42,7 @@ const userSchema = mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minLength: [8, "minlength must be greater than 7 characters"],
+      minLength: [8, "password must be greater than 7 characters"],
     },
 
     forgetPasswordOTP: {
@@ -67,13 +68,34 @@ const userSchema = mongoose.Schema(
 
     login: { type: Boolean, default: false },
     confirmedEmail: { type: Boolean, default: false },
+
+    wishlist: [
+      {
+        type: mongoose.Types.ObjectId,
+        ref: "product",
+      },
+    ],
+    addresses: [
+      {
+        city: String,
+        street: String,
+        phone: String,
+      },
+    ],
+
+    profileImage: {
+      id: { type: String },
+      url: { type: String },
+    },
   },
 
   { timestamps: true }
 );
 
 userSchema.pre("save", function () {
-  this.password = bcrypt.hashSync(this.password, Number(process.env.Round));
+  console.log(this)
+  if (this.password)
+    this.password = bcrypt.hashSync(this.password, Number(process.env.Round));
 });
 
 userSchema.pre("findOneAndUpdate", function () {

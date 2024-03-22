@@ -17,10 +17,15 @@ import {
   verForgetPasswordSchema,
 } from "./user.validation.js";
 import { validation } from "../../middleware/validation.js";
+import { fileUpload } from "../../middleware/fileUpload.js";
 
 const userRouter = express.Router();
 
-userRouter.post("/", validation(createUserSchema), userController.signUp);
+userRouter
+  .route("/")
+  .post(validation(createUserSchema), userController.signUp)
+  .get(userController.getAllUsers);
+
 userRouter.post(
   "/admin",
   protectRoutes,
@@ -57,6 +62,16 @@ userRouter
     userController.getUser
   );
 
+userRouter.post(
+  "/uploadProfileImage",
+  protectRoutes,
+  allowedTo("admin", "user", "doctor", "hospital"),
+  isConfirmed,
+  fileUpload().single("profileImage"),
+  validation(getUserSchema),
+  userController.uploadProfileImage
+);
+
 userRouter.get(
   "/getAnotherUser/:id",
   protectRoutes,
@@ -79,13 +94,13 @@ userRouter.post(
   validation(forgetPasswordSchema),
   userController.forgetPassword
 );
+
 userRouter.patch(
   "/forgetPasswordVerify",
   validation(verForgetPasswordSchema),
   userController.verifyForgetPassword
 );
 
-userRouter.get("/", userController.getAllUser);
 userRouter.get(
   "/logOut/:id",
   protectRoutes,

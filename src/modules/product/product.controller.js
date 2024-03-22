@@ -3,7 +3,7 @@ import { appError } from "../../utils/appError.js";
 import { catchAsyncError } from "../../middleware/catchAsyncError.js";
 import { productModel } from "../../../databases/models/product.model.js";
 import * as factory from "../handlers/factory.handler.js";
-import { ApiFeatures } from "../../utils/ApiFeatures.js";
+import { ApiFeatures, shuffleArray } from "../../utils/ApiFeatures.js";
 import cloudinary from "../../utils/cloud.js";
 import { categoryModel } from "../../../databases/models/category.model.js";
 import { brandModel } from "../../../databases/models/brand.model.js";
@@ -11,33 +11,29 @@ import { nanoid } from "nanoid";
 
 // 1- add product
 const addProduct = catchAsyncError(async (req, res, next) => {
-  let category = await categoryModel.findById(req.body.category);
+  const category = await categoryModel.findById(req.body.category);
   if (!category) return next(new appError("category not found", 404));
-  let brand = await brandModel.findById(req.body.brand);
+  const brand = await brandModel.findById(req.body.brand);
   if (!brand) return next(new appError("brand not found", 404));
 
-  let founded = await productModel.findOne({ title: req.body.title });
+  const founded = await productModel.findOne({ title: req.body.title });
   if (founded)
     return next(new appError("product title is already exists", 409));
 
-  if (!req.files) return next(new appError("product images are required", 400));
-
-  if (req.body.sold < req.body.ratingCount)
+  if (Number(req.body.sold) < Number(req.body.ratingCount))
     return next(new appError("sold must be greater than rating Count", 400));
 
-  const cloudFolder = nanoid();
+  if (!req.files || !req.files.images || !req.files.imageCover)
+    return next(new appError("product images are required", 400));
 
-  const images = [];
+  const cloudFolder =
+    slugify(req.body.title.split(" ").splice(0, 2).join(" ")) + "-" + nanoid();
 
-  for (const file of req.files.images) {
-    const { public_id, secure_url } = await cloudinary.uploader.upload(
-      file.path,
-      {
-        folder: `${process.env.CLOUD_FOLDER_NAME}/product/${cloudFolder}`,
-      }
-    );
-    images.push({ id: public_id, url: secure_url });
-  }
+  const images = await factory.addImages(
+    req.files.images,
+    "product",
+    cloudFolder
+  );
 
   const { public_id, secure_url } = await cloudinary.uploader.upload(
     req.files.imageCover[0].path,
@@ -46,7 +42,7 @@ const addProduct = catchAsyncError(async (req, res, next) => {
     }
   );
 
-  let result = await productModel.create({
+  const result = await productModel.create({
     ...req.body,
     slug: slugify(req.body.title),
     cloudFolder,
@@ -54,33 +50,41 @@ const addProduct = catchAsyncError(async (req, res, next) => {
     images,
   });
 
-  res.json({ message: "success", result });
+  res.status(201).json({ message: "success", result });
 });
 
 // 2- get all products
 const getAllProducts = catchAsyncError(async (req, res, next) => {
-  let apiFeatures = new ApiFeatures(productModel.find(), req.query)
+  const apiFeatures = new ApiFeatures(productModel.find(), req.query)
     .paginate()
     .filter()
     .sort()
     .search()
     .fields();
 
-  // __ execute query __
-  let result = await apiFeatures.mongooseQuery;
+  const result = await apiFeatures.mongooseQuery.exec(); // Execute the query
+
+  const totalProducts = await productModel.countDocuments(
+    apiFeatures.mongooseQuery._conditions
+  );
 
   !result.length && next(new appError("Not products added yet", 404));
+
+  apiFeatures.calculateTotalAndPages(totalProducts);
   result.length &&
-    res
-      .status(200)
-      .json({ message: "success", page: apiFeatures.page, result });
+    res.status(200).json({
+      message: "success",
+      totalProducts,
+      metadata: apiFeatures.metadata,
+      result: shuffleArray(result),
+    });
 });
 
 // 3- get one product
 const getProduct = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
-  let result = await productModel.findById(id);
+  const result = await productModel.findById(id);
 
   !result && next(new appError("product not found", 404));
   result && res.json({ message: "success", result });
@@ -89,14 +93,23 @@ const getProduct = catchAsyncError(async (req, res, next) => {
 // 4- update one product
 const updateProduct = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  const product = await productModel.findById(id);
+  let product = await productModel.findById(id);
   if (!product) return next(new appError("product not found", 404));
 
   const founded = await productModel.findOne({ title: req.body.title });
   if (founded)
     return next(new appError("product title is already exists", 409));
-  let result;
-  if (req.files.imageCover && !req.files.images && req.body) {
+  if (req.body) {
+    product = await productModel.findByIdAndUpdate(
+      id,
+      { ...req.body },
+      {
+        new: true,
+      }
+    );
+  }
+
+  if (req.files.imageCover) {
     await cloudinary.api.delete_resources(product.imageCover.id);
     const { public_id, secure_url } = await cloudinary.uploader.upload(
       req.files.imageCover[0].path,
@@ -104,134 +117,38 @@ const updateProduct = catchAsyncError(async (req, res, next) => {
         folder: `${process.env.CLOUD_FOLDER_NAME}/product/${product.cloudFolder}`,
       }
     );
-    if (req.body.title) {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        {
-          imageCover: { id: public_id, url: secure_url },
-          ...req.body,
-          slug: slugify(req.body.title),
-        },
-        { new: true }
-      );
-    } else {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        { imageCover: { id: public_id, url: secure_url }, ...req.body },
-        { new: true }
-      );
-    }
-  } else if (!req.files.imageCover && req.files.images.length && req.body) {
+    product.imageCover = { id: public_id, url: secure_url };
+  }
+
+  if (req.files.images) {
     const ids = product.images.map((image) => image.id);
     await cloudinary.api.delete_resources(ids);
-    const images = [];
-
-    for (const file of req.files.images) {
-      const { public_id, secure_url } = await cloudinary.uploader.upload(
-        file.path,
-        {
-          folder: `${process.env.CLOUD_FOLDER_NAME}/product/${product.cloudFolder}`,
-        }
-      );
-      images.push({ id: public_id, url: secure_url });
-    }
-    if (req.body.title) {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        {
-          images,
-          ...req.body,
-          slug: slugify(req.body.title),
-        },
-        {
-          new: true,
-        }
-      );
-    } else {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        {
-          images,
-          ...req.body,
-        },
-        {
-          new: true,
-        }
-      );
-    }
-  } else if (!req.files.imageCover && !req.files.images && req.body) {
-    if (req.body.title) {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        { ...req.body, slug: slugify(req.body.title) },
-        { new: true }
-      );
-    } else {
-      result = await productModel.findByIdAndUpdate(id, req.body, {
-        new: true,
-      });
-    }
-  } else if (req.files.imageCover && req.files.images && req.body) {
-    const ids = product.images.map((image) => image.id);
-    ids.push(product.imageCover.id);
-    await cloudinary.api.delete_resources(ids);
-
-    const images = [];
-
-    for (const file of req.files.images) {
-      const { public_id, secure_url } = await cloudinary.uploader.upload(
-        file.path,
-        {
-          folder: `${process.env.CLOUD_FOLDER_NAME}/product/${product.cloudFolder}`,
-        }
-      );
-      images.push({ id: public_id, url: secure_url });
-    }
-
-    const { public_id, secure_url } = await cloudinary.uploader.upload(
-      req.files.imageCover[0].path,
-      {
-        folder: `${process.env.CLOUD_FOLDER_NAME}/product/${product.cloudFolder}`,
-      }
-    );
-    if (req.body.title) {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        {
-          ...req.body,
-          slug: slugify(req.body.title),
-          imageCover: { id: public_id, url: secure_url },
-          images,
-        },
-        { new: true }
-      );
-    } else {
-      result = await productModel.findByIdAndUpdate(
-        id,
-        {
-          ...req.body,
-          imageCover: { id: public_id, url: secure_url },
-          images,
-        },
-        {
-          new: true,
-        }
-      );
-    }
-  } else {
-    next(
-      new appError(
-        "You can update image Cover and fields only or images and fields only or fields only or all together ",
-        400
-      )
+    product.images = await factory.addImages(
+      req.files.images,
+      "product",
+      product.cloudFolder
     );
   }
 
-  !result && next(new appError("product not found", 404));
-  result && res.json({ message: "success", result });
+  await product.save();
+
+  res.json({ message: "success", result: product });
 });
 
 // 5- delete one product
-const deleteProduct = factory.deleteOne(productModel);
+const deleteProduct = catchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  const product = await productModel.findByIdAndDelete(id);
+  if (!product) return next(new appError("product not found", 404));
+
+  const ids = product.images.map((image) => image.id);
+  ids.push(product.imageCover.id);
+  await cloudinary.api.delete_resources(ids);
+  await cloudinary.api.delete_folder(
+    `${process.env.CLOUD_FOLDER_NAME}/product/${product.cloudFolder}`
+  );
+
+  res.status(200).json({ message: "success", result: product });
+});
 
 export { addProduct, getAllProducts, getProduct, updateProduct, deleteProduct };

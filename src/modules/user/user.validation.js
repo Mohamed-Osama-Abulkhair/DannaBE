@@ -1,8 +1,8 @@
 import Joi from "joi";
+import { isValidObjectId } from "../../middleware/validation.js";
 
 const userRoles = ["user", "doctor", "hospital"];
-const adminRoles = ["admin"];
-const idSchema = Joi.string().hex().length(24).required();
+const idSchema = Joi.string().custom(isValidObjectId);
 const nameSchema = Joi.string()
   .min(3)
   .max(20)
@@ -43,7 +43,6 @@ const createAdminSchema = Joi.object({
   email: emailSchema,
   password: passwordSchema,
   // phone: phoneSchema,
-  role: roleSchema(adminRoles),
 });
 
 const loginSchema = Joi.object({
@@ -59,13 +58,14 @@ const updateUserSchema = Joi.object({
   id: idSchema,
   fName: Joi.string().min(3).max(20),
   lName: Joi.string().min(3).max(20),
-  email: Joi.string().email().min(3).max(30),
+  email: Joi.string().email().min(5).max(100),
   // phone: phoneSchema,
 });
 
 const changePasswordSchema = Joi.object({
   id: idSchema,
-  password: passwordSchema,
+  oldPassword: passwordSchema,
+  newPassword: passwordSchema,
 });
 
 const forgetPasswordSchema = Joi.object({

@@ -27,7 +27,7 @@ brandRouter
   .put(
     protectRoutes,
     allowedTo("admin"),
-    fileUpload().single("brand"),
+    fileUpload().single("logo"),
     validation(updateBrandSchema),
     brandController.updateBrand
   )

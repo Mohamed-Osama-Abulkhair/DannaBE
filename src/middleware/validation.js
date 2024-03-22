@@ -14,7 +14,7 @@ export const validation = (schema) => {
   };
 };
 
-export const isValidObjectId =(value,helper)=>{
+export const isValidObjectId = (value, helper) => {
   if (Types.ObjectId.isValid(value)) return true;
-  return helper.message("invalid ObjectId")
-}
+  return helper.message("invalid ObjectId");
+};

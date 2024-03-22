@@ -7,8 +7,8 @@ const productSchema = mongoose.Schema(
       unique: [true, "product title is unique"],
       trim: true,
       required: [true, "product title is required"],
-      minLength: [3, "too short product name"],
-      maxLength: [50, "too more product description"],
+      minLength: [3, "too short product title"],
+      maxLength: [150, "too more product title"],
     },
     slug: {
       type: String,
@@ -20,22 +20,25 @@ const productSchema = mongoose.Schema(
       trim: true,
       required: [true, "product description is required"],
       minLength: [10, "too short product description"],
-      maxLength: [500, "too more product description"],
+      maxLength: [700, "too more product description"],
     },
     price: {
       type: Number,
       required: [true, "product price is required"],
       min: 1,
     },
+
+    finalPrice: {
+      type: Number,
+      min: 1,
+    },
+
     discount: {
       type: Number,
       min: 1,
       max: 100,
     },
-    // priceAfterDiscount: {
-    //   type: Number,
-    //   min: 0,
-    // },
+
     ratingAvg: {
       type: Number,
       min: [1, "rating average must be greater than zero"],
@@ -86,20 +89,22 @@ const productSchema = mongoose.Schema(
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-productSchema.virtual("finalPrice").get(function () {
-  return Number.parseFloat(
-    this.price - (this.price * this.discount || 0) / 100
-  ).toFixed(2);
+productSchema.virtual("productReviews", {
+  ref: "review",
+  localField: "_id",
+  foreignField: "product",
 });
 
-// productSchema.virtual("productReviews", {
-//   ref: "review",
-//   localField: "_id",
-//   foreignField: "product",
-// });
+productSchema.pre(/^find/, function () {
+  this.populate("productReviews");
+});
 
-// productSchema.pre(/^find/, function () {
-//   this.populate("productReviews");
-// });
+productSchema.pre("save", function () {
+  if (this.discount) {
+    this.finalPrice =
+      Math.ceil(this.price - (this.price * this.discount) / 100) - 0.01;
+  }
+  this.price = Math.ceil(this.price) - 0.01;
+});
 
 export const productModel = mongoose.model("product", productSchema);

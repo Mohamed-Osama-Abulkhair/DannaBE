@@ -32,20 +32,29 @@ const addBrand = catchAsyncError(async (req, res, next) => {
 
 // 2- get all Brands
 const getAllBrands = catchAsyncError(async (req, res, next) => {
-  let apiFeatures = new ApiFeatures(brandModel.find(), req.query)
+  const apiFeatures = new ApiFeatures(brandModel.find(), req.query)
     .paginate()
     .filter()
     .sort()
     .search()
     .fields();
 
-  let result = await apiFeatures.mongooseQuery;
+  const result = await apiFeatures.mongooseQuery.exec();
+
+  const totalBrands = await brandModel.countDocuments(
+    apiFeatures.mongooseQuery._conditions
+  );
 
   !result.length && next(new appError("Not brands added yet", 404));
+
+  apiFeatures.calculateTotalAndPages(totalBrands);
   result.length &&
-    res
-      .status(200)
-      .json({ message: "success", page: apiFeatures.page, result });
+    res.status(200).json({
+      message: "success",
+      totalBrands,
+      metadata: apiFeatures.metadata,
+      result,
+    });
 });
 
 // 3- get one brand
@@ -61,59 +70,40 @@ const getBrand = catchAsyncError(async (req, res, next) => {
 // 4- update one brand
 const updateBrand = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  let founded = await brandModel.findOne({ name: req.body.name });
-  if (founded) return next(new appError("brand name is already exists", 409));
-  let result;
+  const brand = await brandModel.findById(id);
+  if (!brand) return next(new appError("brand not found", 404));
 
-  if (req.file && !req.body.name) {
+  if (req.body.name) {
+    const founded = await brandModel.findOne({ name: req.body.name });
+    if (founded) return next(new appError("brand name is already exists", 409));
+    brand.name = req.body.name;
+    brand.slug = slugify(req.body.name);
+  }
+
+  if (req.file) {
+    await cloudinary.api.delete_resources(brand.logo.id);
     const { public_id, secure_url } = await cloudinary.uploader.upload(
       req.file.path,
       {
         folder: `${process.env.CLOUD_FOLDER_NAME}/brand`,
       }
     );
-    result = await brandModel.findByIdAndUpdate(
-      id,
-      { logo: { id: public_id, url: secure_url } },
-      { new: true }
-    );
-  } else if (!req.file && req.body.name) {
-    result = await brandModel.findByIdAndUpdate(
-      id,
-      {
-        name: req.body.name,
-        slug: slugify(req.body.name),
-      },
-      {
-        new: true,
-      }
-    );
-  } else if (req.file && req.body.name) {
-    const { public_id, secure_url } = await cloudinary.uploader.upload(
-      req.file.path,
-      {
-        folder: `${process.env.CLOUD_FOLDER_NAME}/category`,
-      }
-    );
-    result = await brandModel.findByIdAndUpdate(
-      id,
-      {
-        name: req.body.name,
-        slug: slugify(req.body.name),
-        logo: { id: public_id, url: secure_url },
-      },
-      { new: true }
-    );
-  } else {
-    next(new appError("enter name or upload image ", 400));
+
+    brand.logo = { id: public_id, url: secure_url };
   }
 
+  await brand.save();
 
-  !result && next(new appError("brand not found", 404));
-  result && res.status(200).json({ message: "success", result });
+  res.status(200).json({ message: "success", result: brand });
 });
 
 // 5- delete one brand
-const deleteBrand = factory.deleteOne(brandModel);
+const deleteBrand = catchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  const result = await brandModel.findByIdAndDelete(id);
+  !result && next(new appError("brand not found", 404));
+  await cloudinary.api.delete_resources(result.logo.id);
+  result && res.status(200).json({ message: "success", result });
+});
 
 export { addBrand, getAllBrands, getBrand, updateBrand, deleteBrand };

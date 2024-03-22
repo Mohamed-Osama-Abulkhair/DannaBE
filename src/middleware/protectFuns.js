@@ -4,7 +4,7 @@ import { appError } from "../utils/appError.js";
 import { catchAsyncError } from "./catchAsyncError.js";
 
 const protectRoutes = catchAsyncError(async (req, res, next) => {
-  let { token } = req.headers;
+  const { token } = req.headers;
   if (!token) return next(new appError("token not provided", 400));
 
   let decoded;
@@ -18,24 +18,24 @@ const protectRoutes = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  let user = await userModel.findById(decoded.userId);
+  const user = await userModel.findById(decoded.userId);
   if (!user)
     return next(new appError("deleted user , old or invalid token", 498));
 
   if (user.passwordChangedAt) {
-    let passwordChangedDate = parseInt(user.passwordChangedAt.getTime() / 1000);
+    const passwordChangedDate = parseInt(user.passwordChangedAt.getTime() / 1000);
     if (passwordChangedDate > decoded.iat)
       return next(new appError("old or invalid token", 498));
   }
 
   if (user.emailChangedAt) {
-    let emailChangedDate = parseInt(user.emailChangedAt.getTime() / 1000);
+    const emailChangedDate = parseInt(user.emailChangedAt.getTime() / 1000);
     if (emailChangedDate > decoded.iat)
       return next(new appError("old or invalid token", 498));
   }
 
   if (user.loginChangedAt) {
-    let loginChangedDate = parseInt(user.loginChangedAt.getTime() / 1000);
+    const loginChangedDate = parseInt(user.loginChangedAt.getTime() / 1000);
     if (loginChangedDate > decoded.iat)
       return next(new appError("old or invalid token", 498));
   }
@@ -46,14 +46,12 @@ const protectRoutes = catchAsyncError(async (req, res, next) => {
 
 const authorization = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  let targetUser = await userModel.findById(id);
 
   // need to update with doctor and hospitals
 
-  if (targetUser) {
-    if (String(id) !== String(req.user._id))
-      return next(new appError("U r not authorized to do it ", 401));
-  }
+  if (String(id) !== String(req.user._id))
+    return next(new appError("U r not authorized to do it ", 401));
+
   next();
 });
 

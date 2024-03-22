@@ -1,22 +1,22 @@
 import { userModel } from "../../../databases/models/user.model.js";
 import { appError } from "../../utils/appError.js";
 import { catchAsyncError } from "../../middleware/catchAsyncError.js";
-import * as factory from "../handlers/factory.handler.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../../utils/emails/verify.email.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
+import cloudinary from "../../utils/cloud.js";
 
 // 1- sign Up
 const signUp = catchAsyncError(async (req, res, next) => {
   const { email } = req.body;
 
-  let user = await userModel.findOne({ email });
+  const user = await userModel.findOne({ email });
   if (user) return next(new appError("Email already exists", 409));
 
-  if (req.user) req.body.role = "admin";
+  if (req.user?.role == "admin") req.body.role = "admin";
   req.body.userName = `${req.body.fName} ${req.body.lName}`;
-  let result = new userModel(req.body);
+  const result = new userModel(req.body);
   await result.save();
 
   sendEmail({
@@ -27,7 +27,7 @@ const signUp = catchAsyncError(async (req, res, next) => {
     text: `You 've entered ${email} as the email address for your account. click the button below to join our worldwide community.`,
     btnMessage: "Confirm",
   });
-  res.status(201).json({ message: "success", result });
+  res.status(201).json({ message: "success" });
 });
 
 // verify Email
@@ -35,15 +35,28 @@ const verifySignUP = async (req, res, next) => {
   const { token } = req.params;
   if (!token) return next(new appError("token not provided", 498));
 
-  let decoded = jwt.verify(token, process.env.JWT_secretKey);
-  let user = await userModel.findOne({ email: decoded.email });
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_secretKey);
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return next(new appError("invalid token", 401));
+    } else {
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+  const user = await userModel.findOne({ email: decoded.email });
   if (!user) return next(new appError("invalid token", 498));
 
-  let result = await userModel.findOneAndUpdate(
-    { email: decoded.email },
-    { confirmedEmail: true },
-    { new: true }
-  );
+  const result = await userModel
+    .findOneAndUpdate(
+      { email: decoded.email },
+      { confirmedEmail: true },
+      { new: true }
+    )
+    .select(
+      "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -__v"
+    );
 
   res.status(201).json({ message: "success", result });
 };
@@ -52,98 +65,94 @@ const verifySignUP = async (req, res, next) => {
 const signIn = catchAsyncError(async (req, res, next) => {
   const { email, password } = req.body;
 
-  let user;
-  if (email) user = await userModel.findOne({ email });
+  let user = await userModel.findOne({ email });
+  if (!user) return next(new appError("incorrect email or password", 401));
+  const match = await bcrypt.compare(password, user.password);
 
-  if (user) {
-    const match = await bcrypt.compare(password, user.password);
+  if (match) {
+    const token = jwt.sign(
+      { name: user.userName, userId: user._id, role: user.role },
+      process.env.JWT_secretKey
+    );
 
-    if (match) {
-      await userModel.findByIdAndUpdate(user._id, { login: true });
-
-      let token = jwt.sign(
-        { name: user.name, userId: user._id, role: user.role },
-        process.env.JWT_secretKey
-      );
-
-      return res.json({ message: "success", token });
-    }
+    user = await userModel.findOneAndUpdate(
+      { email },
+      { login: true },
+      { new: true }
+    );
+    return res.json({ message: "success", token });
   }
-
-  next(new appError("Incorrect email or password", 401));
+  next(new appError("incorrect email or password", 401));
 });
 
 // 3- update account
 const updateUser = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  let user = await userModel.findById(id);
-  !user && next(new appError("User not found", 404));
+  const user = await userModel
+    .findById(id)
+    .select(
+      "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -__v"
+    );
+  if (!user) return next(new appError("user not found", 404));
 
-  let existsData;
   if (req.body.email) {
-    existsData = await userModel.findOne({ email: req.body.email });
-  }
+    const existsData = await userModel.findOne({ email: req.body.email });
+    if (existsData)
+      return next(new appError("Email already belongs to another user", 409));
 
-  if (user && existsData)
-    return next(new appError("Email already belongs to another user", 409));
+    user.email = req.body.email;
+    user.login = false;
+    user.confirmedEmail = false;
+    user.emailChangedAt = Date.now();
 
-  let result = await userModel.findByIdAndUpdate(id, req.body, { new: true });
-
-  if (req.body.fName || req.body.lName) {
-    let userName = user.userName.split(" ");
+    sendEmail({
+      subject: "Confirm your changed Email ✔",
+      verifyType: "signUpVerify",
+      title: "Confirm <span>Y</span>our Account",
+      email: req.body.email,
+      text: `You 've entered ${req.body.email} as the email address for your account. click the button below to join our worldwide community.`,
+      btnMessage: "Confirm",
+    });
+  } else {
+    const userName = user.userName.split(" ");
     if (req.body.fName && !req.body.lName) {
-      console.log(req.body.fName);
-      result = await userModel.findByIdAndUpdate(
-        id,
-        { userName: `${req.body.fName} ${userName[1]}` },
-        { new: true }
-      );
-    } else if (!req.body.fName && req.body.lName) {
-      console.log(req.body.lName);
-      result = await userModel.findByIdAndUpdate(
-        id,
-        { userName: `${userName[0]} ${req.body.lName}` },
-        { new: true }
-      );
-    } else {
-      result = await userModel.findByIdAndUpdate(
-        id,
-        { userName: `${req.body.fName} ${req.body.lName}` },
-        { new: true }
-      );
+      user.fName = req.body.fName;
+      user.userName = `${req.body.fName} ${userName[1]}`;
+    }
+    if (!req.body.fName && req.body.lName) {
+      user.lName = req.body.lName;
+      user.userName = `${userName[0]} ${req.body.lName}`;
+    }
+    if (req.body.fName && req.body.lName) {
+      user.fName = req.body.fName;
+      user.lName = req.body.lName;
+      user.userName = `${req.body.fName} ${req.body.lName}`;
     }
   }
 
-  if (req.body.email) {
-    result = await userModel.findByIdAndUpdate(
-      id,
-      { login: false, confirmedEmail: false, emailChangedAt: Date.now() },
-      { new: true }
-    );
-  }
-
-  !result && next(new appError("User not found", 404));
-  result && res.status(200).json({ message: "success", result });
+  await user.save();
+  res.status(200).json({ message: "success" });
 });
 
 // 4- Delete account
-const deleteUser = factory.deleteOne(userModel);
+const deleteUser = catchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  const result = await userModel.findByIdAndDelete(id);
+  if (result.profileImage)
+    await cloudinary.api.delete_resources(result.profileImage.id);
+
+  !result && next(new appError("user not found", 404));
+  result && res.status(200).json({ message: "success", result });
+});
 
 // 5- Get user account data
 const getUser = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-
-  let result = await userModel.findById(id, {
-    _id: 0,
-    userName: 0,
-    password: 0,
-    passwordChangedAt: 0,
-    emailChangedAt: 0,
-    login: 0,
-    updatedAt: 0,
-    createdAt: 0,
-    __v: 0,
-  });
+  const result = await userModel
+    .findById(id)
+    .select(
+      "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -__v"
+    );
 
   !result && next(new appError("user not found", 404));
   result && res.status(200).json({ message: "success", result });
@@ -152,19 +161,11 @@ const getUser = catchAsyncError(async (req, res, next) => {
 // 6- Get profile data for another user
 const getAnotherUser = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-
-  let result = await userModel.findById(id, {
-    _id: 0,
-    fName: 0,
-    lName: 0,
-    password: 0,
-    passwordChangedAt: 0,
-    emailChangedAt: 0,
-    confirmedEmail: 0,
-    updatedAt: 0,
-    createdAt: 0,
-    __v: 0,
-  });
+  const result = await userModel
+    .findById(id)
+    .select(
+      "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -addresses -wishlist -__v"
+    );
 
   !result && next(new appError("user not found", 404));
   result && res.status(200).json({ message: "success", result });
@@ -172,18 +173,25 @@ const getAnotherUser = catchAsyncError(async (req, res, next) => {
 
 // 7- Update password
 const changeUserPassword = catchAsyncError(async (req, res, next) => {
-  const { id } = req.params;
-  req.body.passwordChangedAt = Date.now();
-  let result = await userModel.findByIdAndUpdate(id, req.body, { new: true });
+  const { oldPassword, newPassword } = req.body;
+
+  const match = await bcrypt.compare(oldPassword, req.user.password);
+  if (!match) return next(new appError("incorrect password", 401));
+
+  const result = await userModel.findByIdAndUpdate(
+    req.user.id,
+    { password: newPassword, passwordChangedAt: Date.now() },
+    { new: true }
+  );
 
   !result && next(new appError("user not found", 404));
-  result && res.status(200).json({ message: "success", result });
+  result && res.status(200).json({ message: "success" });
 });
 
 // 8- Forget password
 const forgetPassword = catchAsyncError(async (req, res, next) => {
   const { email } = req.body;
-  let user = await userModel.findOne({ email });
+  const user = await userModel.findOne({ email });
   if (!user) return next(new appError("user not found", 404));
 
   // Generate a secure OTP (e.g., a 6-digit number)
@@ -194,7 +202,7 @@ const forgetPassword = catchAsyncError(async (req, res, next) => {
     createdAt: Date.now(),
   };
 
-  let result = await userModel.findOneAndUpdate(
+  const result = await userModel.findOneAndUpdate(
     { email },
     { forgetPasswordOTP: forgetPasswordOTPInstance },
     { new: true }
@@ -209,14 +217,14 @@ const forgetPassword = catchAsyncError(async (req, res, next) => {
     btnMessage: `${OTP}`,
   });
 
-  res.status(201).json({ message: "success", result });
+  res.status(201).json({ message: "success" });
 });
 
 // verify Forget Password
 const verifyForgetPassword = async (req, res, next) => {
   const { email, newPassword, otpCode } = req.body;
 
-  let user = await userModel.findOne({ email });
+  const user = await userModel.findOne({ email });
   if (!user) return next(new appError("user not found", 404));
 
   const otpExpirationTime = 300000; // 5 minutes in milliseconds
@@ -225,44 +233,98 @@ const verifyForgetPassword = async (req, res, next) => {
     otpCode != user.forgetPasswordOTP.otp ||
     Date.now() - user.forgetPasswordOTP.createdAt.getTime() > otpExpirationTime
   )
-    return next(new appError("wrong email or invalid , expired OTP", 498));
+    return next(new appError("wrong email or invalid , expired OTP", 401));
+
+  const forgetPasswordOTP = {
+    createdAt: user.forgetPasswordOTP.createdAt.getTime() - 300000,
+  };
 
   const result = await userModel.findOneAndUpdate(
     { email },
-    { password: newPassword ,login:false},
+    {
+      password: newPassword,
+      login: false,
+      passwordChangedAt: Date.now(),
+      forgetPasswordOTP,
+    },
     { new: true }
   );
 
-  res.status(201).json({ message: "Success", result });
+  res.status(201).json({ message: "Success" });
 };
 
 // 10- Get All users
-const getAllUser = catchAsyncError(async (req, res, next) => {
-  let apiFeatures = new ApiFeatures(userModel.find(), req.query)
+const getAllUsers = catchAsyncError(async (req, res, next) => {
+  const apiFeatures = new ApiFeatures(
+    userModel
+      .find()
+      .select(
+        "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -__v -wishlist -addresses"
+      ),
+    req.query
+  )
     .paginate()
     .filter()
     .sort()
     .search()
     .fields();
 
-  // __ execute query __
-  let result = await apiFeatures.mongooseQuery;
+  const result = await apiFeatures.mongooseQuery.exec();
+
+  const totalUsers = await userModel.countDocuments(
+    apiFeatures.mongooseQuery._conditions
+  );
 
   !result.length && next(new appError("Not users added yet", 404));
+
+  apiFeatures.calculateTotalAndPages(totalUsers);
   result.length &&
-    res.json({ message: "success", page: apiFeatures.page, result });
+    res.status(200).json({
+      message: "success",
+      totalUsers,
+      metadata: apiFeatures.metadata,
+      result,
+    });
 });
 
-// 11- Log Out
+//11- upload user profile Image
+const uploadProfileImage = catchAsyncError(async (req, res, next) => {
+  if (!req.file) return next(new appError(" profile image is required", 400));
+
+  const { public_id, secure_url } = await cloudinary.uploader.upload(
+    req.file.path,
+    {
+      folder: `${process.env.CLOUD_FOLDER_NAME}/user`,
+    }
+  );
+
+  if (req.user.profileImage)
+    await cloudinary.api.delete_resources(req.user.profileImage.id);
+
+  const result = await userModel
+    .findByIdAndUpdate(
+      req.user.id,
+      { profileImage: { id: public_id, url: secure_url } },
+      { new: true }
+    )
+    .select(
+      "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -__v"
+    );
+
+  !result && next(new appError("user not found", 404));
+  result && res.status(200).json({ message: "success", result });
+});
+
+// 12- Log Out
 const logOut = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  let result = await userModel.findByIdAndUpdate(
+  const result = await userModel.findByIdAndUpdate(
     id,
     { login: false, loginChangedAt: Date.now() },
     { new: true }
   );
   !result && next(new appError("user not found", 404));
-  result && res.status(200).json({ message: "success", result });
+  result && res.status(200).json({ message: "success" });
 });
 
 export {
@@ -276,6 +338,7 @@ export {
   changeUserPassword,
   forgetPassword,
   verifyForgetPassword,
-  getAllUser,
+  getAllUsers,
+  uploadProfileImage,
   logOut,
 };
