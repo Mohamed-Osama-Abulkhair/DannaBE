@@ -85,7 +85,7 @@ const createCheckOutSession = catchAsyncError(async (req, res, next) => {
           currency: "egp",
           unit_amount: Math.ceil(totalOrderPrice) * 100,
           product_data: {
-            name: req.user.name,
+            name: req.user.userName,
           },
         },
         quantity: 1,
