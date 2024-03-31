@@ -1,12 +1,12 @@
 import Joi from "joi";
 import { isValidObjectId } from "../../middleware/validation.js";
 
-const title = Joi.string().min(3).max(100);
-const description = Joi.string().min(10).max(500);
+const title = Joi.string().min(3).max(150);
+const description = Joi.string().min(10).max(700);
 const quantity = Joi.number().integer().min(1);
 const sold = Joi.number().min(0);
 const price = Joi.number().integer().min(1);
-const discount = Joi.number().integer().min(1).max(100);
+const discount = Joi.number().integer().min(0).max(100);
 const category = Joi.string().custom(isValidObjectId);
 const brand = Joi.string().custom(isValidObjectId);
 const ratingAvg = Joi.number().min(1);
