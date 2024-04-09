@@ -17,7 +17,6 @@ const videoSchema = mongoose.Schema(
     },
     description: {
       type: String,
-      trim: true,
       required: [true, "video description is required"],
       minLength: [10, "too short video description"],
       maxLength: [1500, "too more video description"],

@@ -114,9 +114,7 @@ const deleteVideo = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
   const video = await videoModel.findByIdAndDelete(id);
   if (!video) return next(new appError("video not found", 404));
-  if (video.videoCover) {
-    await cloudinary.api.delete_resources(video.videoCover.id);
-  }
+  await cloudinary.api.delete_resources(video.videoCover.id);
 
   res.status(200).json({ message: "success", result: video });
 });

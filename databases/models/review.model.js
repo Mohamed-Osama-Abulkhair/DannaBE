@@ -25,7 +25,7 @@ const reviewSchema = mongoose.Schema(
 );
 
 reviewSchema.pre(/^find/, function () {
-  this.populate("user", "userName -_id");
+  this.populate("user", "userName profileImage.url");
 });
 
 export const reviewModel = mongoose.model("review", reviewSchema);

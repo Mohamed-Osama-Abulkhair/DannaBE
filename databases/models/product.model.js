@@ -97,6 +97,8 @@ productSchema.virtual("productReviews", {
 
 productSchema.pre(/^find/, function () {
   this.populate("productReviews");
+  this.populate("category","name")
+  this.populate("brand","name");
 });
 
 productSchema.pre("save", function () {
