@@ -15,6 +15,8 @@ import orderRouter from "./modules/order/order.router.js";
 import videoRouter from "./modules/video/video.router.js";
 import articleRouter from "./modules/article/article.router.js";
 import articleCommentRouter from "./modules/articleComment/articleComment.router.js";
+import postRouter from "./modules/post/post.router.js";
+import postCommentRouter from "./modules/postComment/postComment.router.js";
 
 export const init = (app) => {
   app.get("/", (req, res, next) => {
@@ -33,6 +35,8 @@ export const init = (app) => {
   app.use("/api/v1/videos", videoRouter);
   app.use("/api/v1/articles", articleRouter);
   app.use("/api/v1/article-comments", articleCommentRouter);
+  app.use("/api/v1/posts", postRouter);
+  app.use("/api/v1/post-comments",postCommentRouter);
 
   app.all("*", (req, res, next) => {
     next(new appError("invalid url" + req.originalUrl, 404));

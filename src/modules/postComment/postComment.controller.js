@@ -1,32 +1,44 @@
 import { appError } from "../../utils/appError.js";
 import { catchAsyncError } from "../../middleware/catchAsyncError.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
-import { articleModel } from "../../../databases/models/article.model.js";
-import { articleCommentModel } from "../../../databases/models/articleComment.model.js";
+import { postModel } from "../../../databases/models/post.model.js";
+import { postCommentModel } from "../../../databases/models/postComment.model.js";
 
 // 1- add Comment
 const addComment = catchAsyncError(async (req, res, next) => {
   req.body.user = req.user._id;
 
-  const article = await articleModel.findById(req.body.article);
-  if (!article) return next(new appError("article not found", 404));
+  const post = await postModel.findById(req.body.post);
+  if (!post) return next(new appError("post not found", 404));
 
-  const result = new articleCommentModel(req.body);
-  await result.save();
+  let result;
+  if (post.postType != "question") {
+    result = new postCommentModel(req.body);
+    await result.save();
+  } else {
+    if (req.user.role == "doctor" || req.user.role == "admin") {
+      result = new postCommentModel(req.body);
+      await result.save();
+    } else {
+      return next(
+        new appError("admin or doctor only can answer the question ", 401)
+      );
+    }
+  }
 
-  const comments = await articleCommentModel.find({
-    article: req.body.article,
+  const comments = await postCommentModel.find({
+    post: req.body.post,
   });
 
-  article.comments = comments.length;
-  await article.save();
+  post.comments = comments.length;
+  await post.save();
 
   res.status(201).json({ message: "success", result });
 });
 
 // 2- get all Comments
 const getAllComments = catchAsyncError(async (req, res, next) => {
-  const apiFeatures = new ApiFeatures(articleCommentModel.find(), req.query)
+  const apiFeatures = new ApiFeatures(postCommentModel.find(), req.query)
     .paginate()
     .filter()
     .sort()
@@ -35,7 +47,7 @@ const getAllComments = catchAsyncError(async (req, res, next) => {
 
   const result = await apiFeatures.mongooseQuery.exec();
 
-  const totalComments = await articleCommentModel.countDocuments(
+  const totalComments = await postCommentModel.countDocuments(
     apiFeatures.mongooseQuery._conditions
   );
 
@@ -55,7 +67,7 @@ const getAllComments = catchAsyncError(async (req, res, next) => {
 const getComment = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
-  const result = await articleCommentModel.findById(id);
+  const result = await postCommentModel.findById(id);
 
   !result && next(new appError("Comment not found", 404));
   result && res.status(200).json({ message: "success", result });
@@ -65,7 +77,7 @@ const getComment = catchAsyncError(async (req, res, next) => {
 const updateComment = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
-  const result = await articleCommentModel.findOneAndUpdate(
+  const result = await postCommentModel.findOneAndUpdate(
     { _id: id, user: req.user._id },
     req.body,
     { new: true }
@@ -87,14 +99,14 @@ const deleteComment = catchAsyncError(async (req, res, next) => {
   let result;
 
   if (req.user.role != "admin") {
-    result = await articleCommentModel.findOneAndDelete({
+    result = await postCommentModel.findOneAndDelete({
       _id: id,
       user: req.user._id,
     });
   }
 
   if (req.user.role == "admin") {
-    result = await articleCommentModel.findByIdAndDelete(id);
+    result = await postCommentModel.findByIdAndDelete(id);
   }
 
   if (!result)
@@ -105,14 +117,14 @@ const deleteComment = catchAsyncError(async (req, res, next) => {
       )
     );
 
-  const comments = await articleCommentModel.find({
-    article: result.article,
+  const comments = await postCommentModel.find({
+    post: result.post,
   });
 
-  const article = await articleModel.findOne({ _id: result.article });
+  const post = await postModel.findOne({ _id: result.post });
 
-  article.comments = comments.length;
-  await article.save();
+  post.comments = comments.length;
+  await post.save();
 
   res.status(200).json({ message: "success", result });
 });

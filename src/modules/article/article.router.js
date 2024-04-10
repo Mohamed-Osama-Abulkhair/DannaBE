@@ -51,12 +51,14 @@ articleRouter
   .patch(
     protectRoutes,
     allowedTo("user", "doctor"),
+    isConfirmed,
     validation(getArticleSchema),
     articleController.addLike
   )
   .delete(
     protectRoutes,
     allowedTo("user", "doctor"),
+    isConfirmed,
     validation(getArticleSchema),
     articleController.removeLike
   );
