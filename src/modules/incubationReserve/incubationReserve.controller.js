@@ -102,7 +102,7 @@ const bookIncubationCheckOutSession = catchAsyncError(
       cancel_url: process.env.INCUBATION_CANCEL_URL,
       customer_email: req.user.email,
       client_reference_id: child._id,
-      metadata: req.body,
+      metadata: { ...req.body, type: "incubation" },
       payment_intent_data: {
         application_fee_amount: feeAmount * 100,
         transfer_data: {
@@ -114,59 +114,6 @@ const bookIncubationCheckOutSession = catchAsyncError(
     res.status(200).json({ message: "success", session });
   }
 );
-
-const bookIncubationOnline = catchAsyncError(
-  async (request, response, next) => {
-    const sig = request.headers["stripe-signature"].toString();
-    let event;
-    try {
-      event = stripe.webhooks.constructEvent(
-        request.body,
-        sig,
-        process.env.INCUBATION_SECRET
-      );
-    } catch (err) {
-      return response.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    if (event.type == "checkout.session.completed")
-      return await handleCheckoutEvent(event.data.object, response, next);
-
-    return next(new appError("Event type not handled", 400));
-  }
-);
-
-async function handleCheckoutEvent(e, res, next) {
-  const user = await userModel.findOne({ email: e.customer_email });
-  const incubation = await incubationModel.findById(e.metadata.incubation);
-  const result = await incubationReservationModel.create({
-    ...e.metadata,
-    user: user._id,
-    hospital: incubation.hospital,
-  });
-
-  incubation.empty = false;
-  await incubation.save();
-
-  const availableIncubations = await incubationModel.countDocuments({
-    hospital: e.metadata.hospital,
-    empty: true,
-  });
-
-  await hospitalModel.findOneAndUpdate(
-    { hospital: incubation.hospital },
-    { availableIncubations }
-  );
-
-  const paymentIntent = await stripe.paymentIntents.retrieve(e.payment_intent);
-  if (paymentIntent.status === "succeeded") {
-    console.log("Payment completed successfully");
-  } else {
-    console.error("Payment not completed");
-  }
-
-  res.status(201).json({ message: "success", result });
-}
 
 // 3- get all InCubations Reservations
 const getAllIncubationsReservation = catchAsyncError(async (req, res, next) => {

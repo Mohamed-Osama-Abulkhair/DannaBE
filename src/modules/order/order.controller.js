@@ -6,6 +6,11 @@ import { orderModel } from "../../../databases/models/order.model.js";
 import Stripe from "stripe";
 import { userModel } from "../../../databases/models/user.model.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
+import { incubationModel } from "../../../databases/models/incubation.model.js";
+import { incubationReservationModel } from "../../../databases/models/incubationReserve.model.js";
+import { hospitalModel } from "../../../databases/models/hospital.model.js";
+
+const stripe = new Stripe(process.env.STRIPE_KEY);
 
 // 1- create Cash Order
 const createCashOrder = catchAsyncError(async (req, res, next) => {
@@ -70,8 +75,6 @@ const getAllOrders = catchAsyncError(async (req, res, next) => {
 });
 
 const createCheckOutSession = catchAsyncError(async (req, res, next) => {
-  const stripe = new Stripe(process.env.STRIPE_KEY);
-
   const cart = await cartModel.findById(req.params.id);
   if (!cart) return next(new appError("cart not found", 404));
   const totalOrderPrice = cart.totalPriceAfterDiscount
@@ -97,13 +100,12 @@ const createCheckOutSession = catchAsyncError(async (req, res, next) => {
     cancel_url: process.env.CANCEL_URL,
     customer_email: req.user.email,
     client_reference_id: req.params.id,
-    metadata: req.body.shippingAddress,
+    metadata: { type: "e-commerce", shippingAddress: req.body.shippingAddress },
   });
   res.status(200).json({ message: "success", session });
 });
 
 const createOnlineOrder = catchAsyncError(async (request, response, next) => {
-  const stripe = new Stripe(process.env.STRIPE_KEY);
   const sig = request.headers["stripe-signature"].toString();
   let event;
   try {
@@ -116,9 +118,17 @@ const createOnlineOrder = catchAsyncError(async (request, response, next) => {
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type == "checkout.session.completed") {
+  if (
+    event.type == "checkout.session.completed" &&
+    event.data.object.metadata.type == "e-commerce"
+  )
     return await handleCheckoutEvent(event.data.object, response, next);
-  }
+
+  if (
+    event.type == "checkout.session.completed" &&
+    event.data.object.metadata.type == "incubation"
+  )
+    return await incubationCheckoutEvent(event.data.object, response, next);
 
   return next(new appError("paid not completed", 400));
 });
@@ -154,6 +164,38 @@ async function handleCheckoutEvent(e, res, next) {
   } else {
     return next(new appError("Error creating order", 404));
   }
+}
+
+async function incubationCheckoutEvent(e, res, next) {
+  const user = await userModel.findOne({ email: e.customer_email });
+  const incubation = await incubationModel.findById(e.metadata.incubation);
+  const result = await incubationReservationModel.create({
+    ...e.metadata,
+    user: user._id,
+    hospital: incubation.hospital,
+  });
+
+  incubation.empty = false;
+  await incubation.save();
+
+  const availableIncubations = await incubationModel.countDocuments({
+    hospital: e.metadata.hospital,
+    empty: true,
+  });
+
+  await hospitalModel.findOneAndUpdate(
+    { hospital: incubation.hospital },
+    { availableIncubations }
+  );
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(e.payment_intent);
+  if (paymentIntent.status === "succeeded") {
+    console.log("Payment completed successfully");
+  } else {
+    console.error("Payment not completed");
+  }
+
+  res.status(201).json({ message: "success", result });
 }
 
 export {
