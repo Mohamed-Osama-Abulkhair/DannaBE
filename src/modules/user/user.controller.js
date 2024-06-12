@@ -368,47 +368,6 @@ const addStripeAccount = catchAsyncError(async (req, res, next) => {
   }
 });
 
-// 14- verify Stripe Account
-const verifyStripeAccount = catchAsyncError(async (request, response, next) => {
-  const sig = request.headers["stripe-signature"].toString();
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(
-      request.body,
-      sig,
-      process.env.stripeAccountVerified_SECRET
-    );
-  } catch (err) {
-    return response.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  console.log('Received event:', event);  
-
-
-  if (event.type === "account.updated") {
-    const account = event.data.object;
-    console.log('Account updated event data:', account);
-
-    if (account.charges_enabled) {
-      const user = await userModel.findOneAndUpdate(
-        { stripeAccountId: account.id },
-        { stripeAccountVerified: true },
-        { new: true }
-      );
-
-      user &&
-        response.status(200).send("Account verified and updated successfully.");
-
-      !user && response.status(404).send("User not found.");
-    } else {
-      response.status(200).send("Account not yet enabled for charges.");
-    }
-  } else {
-    response.status(400).send("Event type not handled.");
-  }
-
-  return next(new appError("account not completed", 400));
-});
-
 export {
   signUp,
   verifySignUP,
@@ -424,5 +383,4 @@ export {
   uploadProfileImage,
   logOut,
   addStripeAccount,
-  verifyStripeAccount,
 };

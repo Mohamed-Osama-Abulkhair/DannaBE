@@ -3,15 +3,36 @@ import { catchAsyncError } from "../../middleware/catchAsyncError.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
 import { incubationModel } from "../../../databases/models/incubation.model.js";
 import { hospitalModel } from "../../../databases/models/hospital.model.js";
+import Stripe from "stripe";
+import { userModel } from "../../../databases/models/user.model.js";
+const stripe = new Stripe(process.env.STRIPE_KEY);
 
 // 1- add incubation
 const addIncubation = catchAsyncError(async (req, res, next) => {
-  if (!req.user.stripeAccountVerified)
-    return next(
-      new appError("you should add and verify your Stripe Account First", 409)
-    );
+  if (!req.user.stripeAccountVerified) {
+    try {
+      const transfer = await stripe.transfers.create({
+        amount: 1,
+        currency: "usd",
+        destination: req.user.stripeAccountId,
+      });
 
-  const founded = await incubationModel.findOne({ name: req.body.name });
+      if (transfer) {
+        await userModel.findByIdAndUpdate(req.user._id, {
+          stripeAccountVerified: true,
+        });
+      }
+    } catch (error) {
+      return next(
+        new appError("you should add correct Stripe Account First", 404)
+      );
+    }
+  }
+
+  const founded = await incubationModel.findOne({
+    name: req.body.name,
+    hospital: req.user._id,
+  });
   if (founded)
     return next(new appError("incubation name is already exists", 409));
 

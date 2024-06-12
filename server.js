@@ -5,7 +5,6 @@ import { dbConnection } from "./databases/dbConnection.js";
 import { init } from "./src/index.routes.js";
 import cors from "cors";
 import { createOnlineOrder } from "./src/modules/order/order.controller.js";
-import { verifyStripeAccount } from "./src/modules/user/user.controller.js";
 
 const app = express();
 
@@ -15,11 +14,6 @@ app.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   createOnlineOrder
-);
-app.post(
-  "/stripeAccountVerifiedWebhook",
-  express.raw({ type: "application/json" }),
-  verifyStripeAccount
 );
 
 app.use(express.json());
