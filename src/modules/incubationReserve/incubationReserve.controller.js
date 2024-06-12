@@ -90,7 +90,7 @@ const bookIncubationCheckOutSession = catchAsyncError(
           price_data: {
             currency: "egp",
             product_data: {
-              name: "Incubation Reservation",
+              name: `Incubation Reservation for ${req.user.userName}`,
             },
             unit_amount: price * 100,
           },
@@ -102,7 +102,7 @@ const bookIncubationCheckOutSession = catchAsyncError(
       cancel_url: process.env.INCUBATION_CANCEL_URL,
       customer_email: req.user.email,
       client_reference_id: child._id,
-      metadata: { ...req.body, user: req.user._id, hospital: hospital._id },
+      metadata: req.body,
       payment_intent_data: {
         application_fee_amount: feeAmount * 100,
         transfer_data: {
@@ -137,14 +137,16 @@ const bookIncubationOnline = catchAsyncError(
 );
 
 async function handleCheckoutEvent(e, res, next) {
+  const user = await userModel.findOne({ email: e.customer_email });
+  const incubation = await incubationModel.findById(e.metadata.incubation);
   const result = await incubationReservationModel.create({
     ...e.metadata,
+    user: user._id,
+    hospital: incubation.hospital,
   });
 
-  const incubation = await incubationModel.findByIdAndUpdate(
-    e.metadata.incubation,
-    { empty: false }
-  );
+  incubation.empty = false;
+  await incubation.save();
 
   const availableIncubations = await incubationModel.countDocuments({
     hospital: e.metadata.hospital,
