@@ -87,6 +87,11 @@ const userSchema = mongoose.Schema(
       id: { type: String },
       url: { type: String },
     },
+
+    stripeAccountId: {
+      type: String,
+    },
+    stripeAccountVerified:Boolean
   },
 
   { timestamps: true }

@@ -7,6 +7,9 @@ import { sendEmail } from "../../utils/emails/verify.email.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
 import cloudinary from "../../utils/cloud.js";
 
+import Stripe from "stripe";
+const stripe = new Stripe(process.env.STRIPE_KEY);
+
 // 1- sign Up
 const signUp = catchAsyncError(async (req, res, next) => {
   const { email } = req.body;
@@ -327,6 +330,71 @@ const logOut = catchAsyncError(async (req, res, next) => {
   result && res.status(200).json({ message: "success" });
 });
 
+// 13- add / update Stripe Account
+const addStripeAccount = catchAsyncError(async (req, res, next) => {
+  if (req.user.stripeAccountVerified)
+    return next(new appError("stripe account already verified", 400));
+
+  try {
+    const account = await stripe.accounts.create({
+      type: "express",
+      country: "US",
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+    });
+
+    if (!account) {
+      throw new Error(
+        "Failed to create Stripe account. Please contact Stripe support for more details."
+      );
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: "https://example.com/reauth",
+      return_url: "https://example.com/return",
+      type: "account_onboarding",
+    });
+
+    await userModel.findByIdAndUpdate(req.user._id, {
+      stripeAccountId: account.id,
+    });
+
+    res.status(200).json({ url: accountLink.url });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 14- verify Stripe Account
+const verifyStripeAccount = catchAsyncError(async (request, response, next) => {
+  const sig = request.headers["stripe-signature"].toString();
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      request.body,
+      sig,
+      process.env.stripeAccountVerified_SECRET
+    );
+  } catch (err) {
+    return response.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type == "account.updated") {
+    const account = event.data.object;
+    if (account.charges_enabled) {
+      await userModel.findOneAndUpdate(
+        { stripeAccountId: account.id },
+        { stripeAccountVerified: true }
+      );
+    }
+  }
+
+  return next(new appError("account not completed", 400));
+});
+
 export {
   signUp,
   verifySignUP,
@@ -341,4 +409,6 @@ export {
   getAllUsers,
   uploadProfileImage,
   logOut,
+  addStripeAccount,
+  verifyStripeAccount,
 };

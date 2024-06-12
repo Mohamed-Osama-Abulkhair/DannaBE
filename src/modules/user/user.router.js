@@ -24,7 +24,13 @@ const userRouter = express.Router();
 userRouter
   .route("/")
   .post(validation(createUserSchema), userController.signUp)
-  .get(userController.getAllUsers);
+  .get(userController.getAllUsers)
+  .patch(
+    protectRoutes,
+    allowedTo("hospital", "doctor"),
+    isConfirmed,
+    userController.addStripeAccount
+  );
 
 userRouter.post(
   "/admin",

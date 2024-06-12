@@ -2,7 +2,6 @@ import slugify from "slugify";
 import { appError } from "../../utils/appError.js";
 import { catchAsyncError } from "../../middleware/catchAsyncError.js";
 import { brandModel } from "../../../databases/models/brand.model.js";
-import * as factory from "../handlers/factory.handler.js";
 import { ApiFeatures } from "../../utils/ApiFeatures.js";
 import cloudinary from "../../utils/cloud.js";
 

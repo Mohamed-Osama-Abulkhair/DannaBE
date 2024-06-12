@@ -3,12 +3,7 @@ import { isValidObjectId } from "../../middleware/validation.js";
 
 const userRoles = ["user", "doctor", "hospital"];
 const idSchema = Joi.string().custom(isValidObjectId);
-const nameSchema = Joi.string()
-  .min(3)
-  .max(20)
-  .trim()
-  .pattern(/^\S*$/, "no spaces allowed")
-  .required();
+const nameSchema = Joi.string().min(3).max(50).trim().required();
 const emailSchema = Joi.string().email().min(5).max(100).trim().required();
 const passwordSchema = Joi.string()
   .min(8)

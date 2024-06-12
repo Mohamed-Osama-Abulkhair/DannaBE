@@ -17,6 +17,10 @@ import articleRouter from "./modules/article/article.router.js";
 import articleCommentRouter from "./modules/articleComment/articleComment.router.js";
 import postRouter from "./modules/post/post.router.js";
 import postCommentRouter from "./modules/postComment/postComment.router.js";
+import hospitalRouter from "./modules/hospital/hospital.router.js";
+import incubationRouter from "./modules/incubation/incubation.router.js";
+import childRouter from "./modules/child/child.router.js";
+import incubationReserveRouter from "./modules/incubationReserve/incubationReserve.router.js";
 
 export const init = (app) => {
   app.get("/", (req, res, next) => {
@@ -37,6 +41,10 @@ export const init = (app) => {
   app.use("/api/v1/article-comments", articleCommentRouter);
   app.use("/api/v1/posts", postRouter);
   app.use("/api/v1/post-comments",postCommentRouter);
+  app.use("/api/v1/hospitals",hospitalRouter);
+  app.use("/api/v1/incubations",incubationRouter);
+  app.use("/api/v1/children",childRouter);
+  app.use("/api/v1/bookIncubation",incubationReserveRouter);
 
   app.all("*", (req, res, next) => {
     next(new appError("invalid url" + req.originalUrl, 404));

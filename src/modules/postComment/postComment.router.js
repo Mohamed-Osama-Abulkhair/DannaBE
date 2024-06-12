@@ -18,7 +18,7 @@ const postCommentRouter = express.Router();
 postCommentRouter
   .route("/")
   .post(
-    protectRoutes,
+    protectRoutes,  
     allowedTo("admin","user", "doctor"),
     isConfirmed,
     validation(createPostCommentSchema),
