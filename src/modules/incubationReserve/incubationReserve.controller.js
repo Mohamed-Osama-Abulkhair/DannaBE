@@ -82,8 +82,6 @@ const bookIncubationCheckOutSession = catchAsyncError(
     const price = ReservedIncubation.price;
     const feePercentage = 5;
     const feeAmount = (price * feePercentage) / 100;
-    req.body.user = req.user._id;
-    req.body.hospital = hospital._id;
 
     let session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -104,7 +102,7 @@ const bookIncubationCheckOutSession = catchAsyncError(
       cancel_url: process.env.INCUBATION_CANCEL_URL,
       customer_email: req.user.email,
       client_reference_id: child._id,
-      metadata: req.body,
+      metadata: { ...req.body, user: req.user._id, hospital: hospital._id },
       payment_intent_data: {
         application_fee_amount: feeAmount * 100,
         transfer_data: {
