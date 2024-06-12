@@ -382,14 +382,25 @@ const verifyStripeAccount = catchAsyncError(async (request, response, next) => {
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  if (event.type == "account.updated") {
+  if (event.type === "account.updated") {
     const account = event.data.object;
+
     if (account.charges_enabled) {
-      await userModel.findOneAndUpdate(
+      const user = await userModel.findOneAndUpdate(
         { stripeAccountId: account.id },
-        { stripeAccountVerified: true }
+        { stripeAccountVerified: true },
+        { new: true }
       );
+
+      user &&
+        response.status(200).send("Account verified and updated successfully.");
+
+      !user && response.status(404).send("User not found.");
+    } else {
+      response.status(200).send("Account not yet enabled for charges.");
     }
+  } else {
+    response.status(400).send("Event type not handled.");
   }
 
   return next(new appError("account not completed", 400));
