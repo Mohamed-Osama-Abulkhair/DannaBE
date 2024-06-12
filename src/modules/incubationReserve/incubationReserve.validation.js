@@ -4,16 +4,14 @@ const createIncubationReserveSchema = Joi.object({
   incubation: Joi.string().hex().length(24).required(),
   child: Joi.string().hex().length(24).required(),
 
-  reasonForReservation: Joi.array()
-    .items(
-      Joi.string().valid(
-        "Jaundice",
-        "Premature Birth",
-        "Heart Problems",
-        "Respiratory Problems",
-        "Down Syndrome",
-        "Other"
-      )
+  reasonForReservation: Joi.string()
+    .valid(
+      "Jaundice",
+      "Premature Birth",
+      "Heart Problems",
+      "Respiratory Problems",
+      "Down Syndrome",
+      "Other"
     )
     .required(),
 
