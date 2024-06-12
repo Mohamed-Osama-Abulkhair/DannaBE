@@ -156,6 +156,7 @@ async function handleCheckoutEvent(e, res, next) {
       amount: price * 100,
       currency: "egp",
       payment_method_types: ["card"],
+      confirm: true,
       application_fee_amount: feeAmount * 100,
       transfer_data: {
         destination: hospital.stripeAccountId,
