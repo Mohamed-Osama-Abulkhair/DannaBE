@@ -381,9 +381,12 @@ const verifyStripeAccount = catchAsyncError(async (request, response, next) => {
   } catch (err) {
     return response.status(400).send(`Webhook Error: ${err.message}`);
   }
+  console.log('Received event:', event);  
+
 
   if (event.type === "account.updated") {
     const account = event.data.object;
+    console.log('Account updated event data:', account);
 
     if (account.charges_enabled) {
       const user = await userModel.findOneAndUpdate(
