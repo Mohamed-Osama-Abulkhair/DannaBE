@@ -198,7 +198,6 @@ const getIncubationReservation = catchAsyncError(async (req, res, next) => {
 export {
   getNearHospitals,
   bookIncubationCheckOutSession,
-  bookIncubationOnline,
   getAllIncubationsReservation,
   getIncubationReservation,
 };
