@@ -77,28 +77,27 @@ const bookIncubationCheckOutSession = catchAsyncError(
     if (!child)
       return next(new appError("child not found or he isn't your child ", 404));
 
-    let session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price_data: {
-            currency: "egp",
-            unit_amount: ReservedIncubation.price * 100,
-            product_data: {
-              name: `Incubation Reservation for ${req.user.userName}`,
-            },
-          },
-          quantity: 1,
-        },
-      ],
+    const hospital = await userModel.findById(ReservedIncubation.hospital);
+
+    const price = ReservedIncubation.price;
+    const feePercentage = 5;
+    const feeAmount = (price * feePercentage) / 100;
+    req.body.user = req.user._id;
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: price * 100,
+      currency: "egp",
       payment_method_types: ["card"],
-      mode: "payment",
-      success_url: process.env.INCUBATION_SUCCESSFUL_URL,
-      cancel_url: process.env.INCUBATION_CANCEL_URL,
-      customer_email: req.user.email,
-      client_reference_id: child._id.toString(),
+      application_fee_amount: feeAmount * 100,
+      transfer_data: {
+        destination: hospital.stripeAccountId,
+      },
       metadata: req.body,
     });
-    res.status(200).json({ message: "success", session });
+
+    res
+      .status(200)
+      .json({ message: "success", clientSecret: paymentIntent.client_secret });
   }
 );
 
@@ -116,21 +115,18 @@ const bookIncubationOnline = catchAsyncError(
       return response.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    if (event.type == "checkout.session.completed")
+    if (event.type == "payment_intent.succeeded")
       return await handleCheckoutEvent(event.data.object, response, next);
 
-    return next(new appError("paid not completed", 400));
+    return next(new appError("Event type not handled", 400));
   }
 );
 
 async function handleCheckoutEvent(e, res, next) {
-  const user = await userModel.findOne({ email: e.customer_email });
   const incubation = await incubationModel.findById(e.metadata.incubation);
-  const hospital = await userModel.findById(incubation.hospital);
 
   const result = await incubationReservationModel.create({
-    user: user._id,
-    hospital: hospital._id,
+    hospital: incubation.hospital,
     ...e.metadata,
   });
 
@@ -138,34 +134,16 @@ async function handleCheckoutEvent(e, res, next) {
   await incubation.save();
 
   const availableIncubations = await incubationModel.countDocuments({
-    hospital: hospital._id,
+    hospital: incubation.hospital,
     empty: true,
   });
 
   await hospitalModel.findOneAndUpdate(
-    { hospital: hospital._id },
+    { hospital: incubation.hospital },
     { availableIncubations }
   );
 
-  const price = incubation.price;
-  const feePercentage = 5;
-  const feeAmount = (price * feePercentage) / 100;
-
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: price * 100,
-      currency: "egp",
-      payment_method_types: ["card"],
-      application_fee_amount: feeAmount * 100,
-      transfer_data: {
-        destination: hospital.stripeAccountId,
-      },
-    });
-
-    res.status(201).json({ message: "success", result });
-  } catch (err) {
-    return next(new appError(`Payment failed: ${err.message}`, 500));
-  }
+  res.status(201).json({ message: "success", result });
 }
 
 // 3- get all InCubations Reservations
