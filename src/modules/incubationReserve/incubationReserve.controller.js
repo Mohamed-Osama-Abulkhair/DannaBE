@@ -83,21 +83,37 @@ const bookIncubationCheckOutSession = catchAsyncError(
     const feePercentage = 5;
     const feeAmount = (price * feePercentage) / 100;
     req.body.user = req.user._id;
+    req.body.hospital = hospital._id;
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: price * 100,
-      currency: "egp",
+    let session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      application_fee_amount: feeAmount * 100,
-      transfer_data: {
-        destination: hospital.stripeAccountId,
-      },
+      line_items: [
+        {
+          price_data: {
+            currency: "egp",
+            product_data: {
+              name: "Incubation Reservation",
+            },
+            unit_amount: price * 100,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: process.env.INCUBATION_SUCCESSFUL_URL,
+      cancel_url: process.env.INCUBATION_CANCEL_URL,
+      customer_email: req.user.email,
+      client_reference_id: child._id,
       metadata: req.body,
+      payment_intent_data: {
+        application_fee_amount: feeAmount * 100,
+        transfer_data: {
+          destination: hospital.stripeAccountId,
+        },
+      },
     });
 
-    res
-      .status(200)
-      .json({ message: "success", clientSecret: paymentIntent.client_secret });
+    res.status(200).json({ message: "success", session });
   }
 );
 
@@ -115,7 +131,7 @@ const bookIncubationOnline = catchAsyncError(
       return response.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    if (event.type == "payment_intent.succeeded")
+    if (event.type == "checkout.session.completed")
       return await handleCheckoutEvent(event.data.object, response, next);
 
     return next(new appError("Event type not handled", 400));
@@ -123,18 +139,17 @@ const bookIncubationOnline = catchAsyncError(
 );
 
 async function handleCheckoutEvent(e, res, next) {
-  const incubation = await incubationModel.findById(e.metadata.incubation);
-
   const result = await incubationReservationModel.create({
-    hospital: incubation.hospital,
     ...e.metadata,
   });
 
-  incubation.empty = false;
-  await incubation.save();
+  const incubation = await incubationModel.findByIdAndUpdate(
+    e.metadata.incubation,
+    { empty: false }
+  );
 
   const availableIncubations = await incubationModel.countDocuments({
-    hospital: incubation.hospital,
+    hospital: e.metadata.hospital,
     empty: true,
   });
 
@@ -142,6 +157,13 @@ async function handleCheckoutEvent(e, res, next) {
     { hospital: incubation.hospital },
     { availableIncubations }
   );
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(e.payment_intent);
+  if (paymentIntent.status === "succeeded") {
+    console.log("Payment completed successfully");
+  } else {
+    console.error("Payment not completed");
+  }
 
   res.status(201).json({ message: "success", result });
 }
