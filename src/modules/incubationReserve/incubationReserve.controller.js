@@ -125,7 +125,7 @@ const bookIncubationOnline = catchAsyncError(
 
 async function handleCheckoutEvent(e, res, next) {
   const user = await userModel.findOne({ email: e.customer_email });
-  const incubation = await incubationModel.finById(e.metadata.incubation);
+  const incubation = await incubationModel.findById(e.metadata.incubation);
   const hospital = await userModel.findById(incubation.hospital);
 
   const result = await incubationReservationModel.create({
