@@ -178,14 +178,14 @@ async function incubationCheckoutEvent(e, res, next) {
   incubation.empty = false;
   await incubation.save();
 
-  const availableIncubations = await incubationModel.countDocuments({
+  const availableIncubations = await incubationModel.find({
     hospital: e.metadata.hospital,
     empty: true,
   });
-
+  
   await hospitalModel.findOneAndUpdate(
     { hospital: incubation.hospital },
-    { availableIncubations }
+    { availableIncubations:availableIncubations.length }
   );
 
   const paymentIntent = await stripe.paymentIntents.retrieve(e.payment_intent);
