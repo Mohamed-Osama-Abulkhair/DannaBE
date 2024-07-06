@@ -1,14 +1,8 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export const htmlOfEmail = (
-  token,
-  verifyType,
-  title,
-  text,
-  btnMessage
-) => {
-  return`<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+export const htmlOfEmail = (token, verifyType, title, text, btnMessage) => {
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
   <html dir="ltr" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
    <head>
     <meta charset="UTF-8">
@@ -105,9 +99,7 @@ export const htmlOfEmail = (
                        </tr>
                        <tr>
                         <td align="center" style="padding:0;Margin:0"><!-- --><span class="msohide es-button-border" style="border-style:solid;background:#32aa90;border-width:0px;display:inline-block;border-radius:30px;width:auto;mso-hide:all"><a href="${
-                          token
-                            ? `${process.env.baseURL}/api/v1/users/${verifyType}/${token}`
-                            : `#`
+                          token ? `${process.env.baseURL}` : `#`
                         }" class="es-button" target="_blank" style="mso-style-priority:100 !important;text-decoration:none;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;color:#FFFFFF;font-size:18px;display:inline-block;background:#32aa90;border-radius:30px;font-family:Lexend, Arial, sans-serif;font-weight:normal;font-style:normal;line-height:22px;width:auto;text-align:center;padding:10px 30px 10px 30px;mso-padding-alt:0;mso-border-alt:10px solid #FF4A4A">${btnMessage}</a></span><!--<![endif]--></td>
                        </tr>
                      </table></td>

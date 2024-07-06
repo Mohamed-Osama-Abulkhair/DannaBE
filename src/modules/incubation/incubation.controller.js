@@ -20,7 +20,9 @@ const addIncubation = catchAsyncError(async (req, res, next) => {
       if (transfer) {
         await userModel.findByIdAndUpdate(req.user._id, {
           stripeAccountVerified: true,
-        });
+        }).select(
+          "-password -forgetPasswordOTP -passwordChangedAt -loginChangedAt -emailChangedAt -__v"
+        );;
       }
     } catch (error) {
       return next(

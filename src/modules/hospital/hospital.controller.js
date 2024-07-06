@@ -10,6 +10,12 @@ const addHospitalLocation = catchAsyncError(async (req, res, next) => {
     return next(new appError("hospital already has a location", 409));
 
   req.body.hospital = req.user._id;
+  req.body.location.coordinates[0] = parseFloat(
+    req.body.location.coordinates[0].toFixed(7)
+  );
+  req.body.location.coordinates[1] = parseFloat(
+    req.body.location.coordinates[1].toFixed(7)
+  );
   const result = await hospitalModel.create(req.body);
 
   res.status(201).json({ message: "success", result });
@@ -46,7 +52,7 @@ const getAllHospitalsLocations = catchAsyncError(async (req, res, next) => {
 const getHospitalLocation = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
-  const hospital = await hospitalModel.findById(id);
+  const hospital = await hospitalModel.findById(id)||await hospitalModel.findOne({hospital:id})
   if (!hospital) return next(new appError("hospital not found", 404));
 
   res.status(200).json({ message: "success", result: hospital });
@@ -58,12 +64,19 @@ const updateHospitalLocation = catchAsyncError(async (req, res, next) => {
   if (!hospital)
     return next(new appError("hospital's location not found", 404));
 
-  if (req.body.hospitalLocation) {
-    hospital.hospitalLocation = req.body.hospitalLocation;
+  if (req.body.location) {
+    hospital.location = req.body.location;
+    hospital.location.coordinates[0] = parseFloat(
+      req.body.location.coordinates[0].toFixed(7)
+    );
+    hospital.location.coordinates[1] = parseFloat(
+      req.body.location.coordinates[1].toFixed(7)
+    );
   }
   if (req.body.address) {
     hospital.address = req.body.address;
   }
+
 
   await hospital.save();
 

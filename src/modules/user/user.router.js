@@ -116,4 +116,31 @@ userRouter.get(
   userController.logOut
 );
 
+userRouter.post(
+  "/addFriend",
+  protectRoutes,
+  allowedTo("user", "doctor"),
+  isConfirmed,
+  validation(forgetPasswordSchema),
+  userController.inviteFriend
+);
+userRouter.post(
+  "/acceptAddFriend",
+  protectRoutes,
+  allowedTo("user", "doctor"),
+  isConfirmed,
+  validation(getUserSchema),
+  userController.acceptAddFriend
+);
+userRouter.post(
+  "/rejectAddFriend",
+  protectRoutes,
+  allowedTo("user", "doctor"),
+  isConfirmed,
+  validation(getUserSchema),
+  userController.rejectAddFriend
+);
+
+// userRouter.get("/getAllConversations/conversations", userController.getAllConversations);
+
 export default userRouter;

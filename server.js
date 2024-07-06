@@ -5,6 +5,7 @@ import { dbConnection } from "./databases/dbConnection.js";
 import { init } from "./src/index.routes.js";
 import cors from "cors";
 import { createOnlineOrder } from "./src/modules/order/order.controller.js";
+import { registerSocketServer } from "./socketServer.js";
 
 const app = express();
 
@@ -17,12 +18,13 @@ app.post(
 );
 
 app.use(express.json());
-
 init(app);
 
 dbConnection();
-app.listen(process.env.PORT || process.env.port, () =>
+const server = app.listen(process.env.PORT || process.env.port, () =>
   console.log(
     `server is listening on port ${process.env.PORT || process.env.port}`
   )
 );
+
+registerSocketServer(server);

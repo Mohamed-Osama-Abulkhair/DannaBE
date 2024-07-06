@@ -21,6 +21,8 @@ import hospitalRouter from "./modules/hospital/hospital.router.js";
 import incubationRouter from "./modules/incubation/incubation.router.js";
 import childRouter from "./modules/child/child.router.js";
 import incubationReserveRouter from "./modules/incubationReserve/incubationReserve.router.js";
+import doctorRouter from "./modules/doctor/doctor.router.js";
+import videoCallRouter from "./modules/videoCall/videoCall.router.js";
 
 export const init = (app) => {
   app.get("/", (req, res, next) => {
@@ -45,6 +47,8 @@ export const init = (app) => {
   app.use("/api/v1/incubations",incubationRouter);
   app.use("/api/v1/children",childRouter);
   app.use("/api/v1/bookIncubation",incubationReserveRouter);
+  app.use("/api/v1/doctors",doctorRouter);
+  app.use("/api/v1/videoCalls",videoCallRouter);
 
   app.all("*", (req, res, next) => {
     next(new appError("invalid url" + req.originalUrl, 404));

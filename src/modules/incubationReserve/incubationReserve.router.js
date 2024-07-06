@@ -15,7 +15,7 @@ import {
 const incubationReserveRouter = express.Router();
 
 incubationReserveRouter
-  .get("/nearIncubations",
+  .post("/nearIncubations",
     protectRoutes,
     allowedTo("user"),
     isConfirmed,

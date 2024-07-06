@@ -91,7 +91,30 @@ const userSchema = mongoose.Schema(
     stripeAccountId: {
       type: String,
     },
-    stripeAccountVerified:Boolean
+    stripeAccountVerified: Boolean,
+
+    inCall: {
+      type: Boolean,
+      default: false,
+    },
+
+    rating: {
+      type: Number,
+      min: 0,
+      max: 5,
+    },
+
+    doctorPrice: {
+      type: Number,
+      min: 1,
+    },
+
+    doctorCertificated: {
+      type: Boolean,
+      default: false,
+    },
+
+    friends: [{ type: mongoose.Types.ObjectId, ref: "user" }],
   },
 
   { timestamps: true }

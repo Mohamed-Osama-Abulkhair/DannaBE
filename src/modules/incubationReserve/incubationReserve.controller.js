@@ -12,10 +12,11 @@ const stripe = new Stripe(process.env.STRIPE_KEY);
 
 // 1- get near hospitals of empty Incubations
 const getNearHospitals = catchAsyncError(async (req, res, next) => {
-  const { long, lat } = req.body;
+  const long = parseFloat(req.body.long.toFixed(7));
+  const lat = parseFloat(req.body.lat.toFixed(7));
   let distance = req.body.distance || 10000;
 
-  let query = hospitalModel.find({
+  const hospitals = await hospitalModel.find({
     location: {
       $near: {
         $geometry: {
@@ -25,39 +26,20 @@ const getNearHospitals = catchAsyncError(async (req, res, next) => {
         $maxDistance: distance,
       },
     },
-    availableIncubations: true,
   });
 
-  const initialResult = await query.exec();
+  const nearHospitals = [];
 
-  const apiFeatures = new ApiFeatures(
-    hospitalModel.find({ _id: { $in: initialResult.map((h) => h._id) } }),
-    req.query
-  )
-    .paginate()
-    .filter()
-    .sort()
-    .search()
-    .fields();
-
-  const result = await apiFeatures.mongooseQuery.exec();
-
-  const totalNearHospitals = result.length;
-
-  if (!totalNearHospitals) {
-    return next(
-      new appError(`No Incubation Available within ${distance} meters`, 404)
-    );
+  for (let i = 0; i < hospitals.length; i++) {
+    if (hospitals[i].availableIncubations) nearHospitals.push(hospitals[i]);
   }
 
-  apiFeatures.calculateTotalAndPages(totalNearHospitals);
-
-  res.status(200).json({
-    message: "success",
-    totalNearHospitals,
-    metadata: apiFeatures.metadata,
-    result,
-  });
+  !nearHospitals.length &&
+    next(
+      new appError(`No Incubation Available within ${distance} meters`, 404)
+    );
+  nearHospitals.length &&
+    res.status(200).json({ message: "success", result: nearHospitals });
 });
 
 // 2- book incubation
