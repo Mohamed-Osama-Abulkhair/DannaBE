@@ -179,7 +179,7 @@ async function incubationCheckoutEvent(e, res, next) {
   await incubation.save();
 
   const availableIncubations = await incubationModel.find({
-    hospital: e.metadata.hospital,
+    hospital: incubation.hospital,
     empty: true,
   });
   
